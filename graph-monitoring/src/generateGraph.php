@@ -60,11 +60,11 @@ if (!isset($_GET['service'])) {
 list($hostId, $serviceId) = explode('-', $_GET['service']);
 
 $db = new CentreonDB("centstorage");
-$res = $db->query("SELECT `id`
-				   FROM index_data
-    			   WHERE host_id = ".$db->escape($hostId)."
-    			   AND service_id = ".$db->escape($serviceId)."
-    			   LIMIT 1");
+
+$query = "SELECT `id` FROM index_data WHERE host_id = ? AND service_id = ? LIMIT 1";
+$stmt = $db->prepare($query);
+$res = $db->execute($stmt, array((int)$hostId, (int)$serviceId));
+
 if ($res->numRows()) {
     $row = $res->fetchRow();
     $index = $row["id"];
@@ -76,7 +76,7 @@ if ($res->numRows()) {
  * Create XML Request Objects
  */
 
-$iIdUser = $_GET['user'];
+$iIdUser = (int)$_GET['user'];
 
 $obj = new CentreonGraph($iIdUser, $index, 0, 1);
 
@@ -85,7 +85,7 @@ require_once $centreon_path."www/include/common/common-Func.php";
 /**
  * Set arguments from GET
  */
-$graphPeriod = isset($_GET['tp']) ? $_GET['tp'] : (60*60*48);
+$graphPeriod = (int)isset($_GET['tp']) ? $_GET['tp'] : (60*60*48);
 $obj->setRRDOption("start", (time() - $graphPeriod));
 $obj->setRRDOption("end", time());
 
@@ -107,7 +107,7 @@ $obj->setColor("SHADEA","#FFFFFF");
 $obj->setColor("SHADEB","#FFFFFF");
 
 if (isset($_GET['width']) && $_GET['width']) {
-   $obj->setRRDOption("width", ($_GET['width'] - 110));
+   $obj->setRRDOption("width", (int)($_GET['width'] - 110));
    //$obj->setRRDOption("width", 400);
 }
 
