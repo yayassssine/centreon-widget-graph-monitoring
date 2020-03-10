@@ -52,10 +52,15 @@ if (!CentreonSession::checkSession(session_id(), $pearDB)) {
 if (!isset($_REQUEST['widgetId'])) {
     exit;
 }
+
 $centreon = $_SESSION['centreon'];
-$widgetId = $_REQUEST['widgetId'];
+$widgetId = filter_var($_REQUEST['widgetId'], FILTER_VALIDATE_INT);
 
 try {
+    if ($widgetId === false) {
+        throw new InvalidArgumentException('Widget ID must be an integer');
+    }
+
     global $pearDB;
 
     $pearDB = $dbAcl = $db = $dependencyInjector['configuration_db'];
@@ -63,12 +68,14 @@ try {
 
     $widgetObj = new CentreonWidget($centreon, $db);
     $preferences = $widgetObj->getWidgetPreferences($widgetId);
-    $autoRefresh = 0;
+    
+    $autoRefresh = filter_var($preferences['refresh_interval'], FILTER_VALIDATE_INT);
 
-    if (isset($preferences['refresh_interval'])) {
-        $autoRefresh = $preferences['refresh_interval'];
+    if ($autoRefresh === false || $autoRefresh < 5) {
+        $autoRefresh = 30;
     }
-}    catch (Exception $e) {
+
+} catch (Exception $e) {
     echo $e->getMessage() . "<br/>";
     exit;
 }
@@ -88,13 +95,19 @@ $template = initSmartyTplForPopup($path, $template, "/", $centreon_path);
 */
 
 $acl = 1;
-if (isset($tab[0]) && isset($tab[1]) && $centreon->user->admin == 0 ) {
-    $query = "SELECT host_id
-            FROM centreon_acl
-            WHERE host_id = ".$dbAcl->escape($tab[0])."
-            AND service_id = ".$dbAcl->escape($tab[1])."
-            AND group_id IN (".$grouplistStr.")";
-    $res = $dbAcl->query($query);
+if (isset($tab[0]) && isset($tab[1]) && $centreon->user->admin == 0) {
+    $sql = "SELECT host_id
+        FROM centreon_acl
+        WHERE host_id = :hostId
+        AND service_id = :serviceId
+        AND group_id IN (:groupList)";
+
+    $res = $dbAcl->prepare($sql);
+    $res->bindValue(':hostId', $tab[0], PDO::PARAM_INT);
+    $res->bindValue(':serviceId', $tab[1], PDO::PARAM_INT);
+    $res->bindValue(':groupList', $grouplistStr, PDO::PARAM_STR);
+    $res->execute();
+
     if (!$res->rowCount()) {
         $acl = 0;
     }
@@ -110,7 +123,6 @@ if ($acl === 0){
     $servicePreferences = "<div class='update' style='text-align:center;margin-left: auto;margin-right: auto;width:350px;'>"._("Please select a graph period")."</div>";
 }
 
-$autoRefresh = $preferences['refresh_interval'];
 $template->assign('widgetId', $widgetId);
 $template->assign('preferences', $preferences);
 $template->assign('interval', $preferences['graph_period']);
